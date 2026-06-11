@@ -1,5 +1,5 @@
 from openai import OpenAI
-from config import Config
+from olx_finder.config import Config
 from typing import Any, List, Dict
 
 

@@ -1,7 +1,7 @@
-from scraper import Scraper
-from ai_client import AIClient
-from spec_extractor import SpecExtractor
-from offer_comparator import OfferComparator
+from olx_finder.scraper import Scraper
+from olx_finder.ai_client import AIClient
+from olx_finder.spec_extractor import SpecExtractor
+from olx_finder.offer_comparator import OfferComparator
 
 
 class App:

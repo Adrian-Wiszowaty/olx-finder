@@ -1,5 +1,5 @@
-from prompts import SPEC_EXTRACTION
-from ai_client_protocol import AIClientProtocol
+from olx_finder.prompts import SPEC_EXTRACTION
+from olx_finder.ai_client_protocol import AIClientProtocol
 
 
 class SpecExtractor:

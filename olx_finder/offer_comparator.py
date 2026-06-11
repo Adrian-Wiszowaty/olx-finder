@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
-from ai_client_protocol import AIClientProtocol
-from prompts import OFFER_COMPARISON
+from olx_finder.ai_client_protocol import AIClientProtocol
+from olx_finder.prompts import OFFER_COMPARISON
 
 
 class OfferComparator:
