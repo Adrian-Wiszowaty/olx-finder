@@ -17,6 +17,7 @@ from olx_finder.scraper import get_scraper
 
 EXIT_WORDS = {"koniec", "exit", "quit", "q"}
 NEW_WORDS = {"nowa", "nowe", "new"}
+LARGE_RESULT_SET = 60
 
 console = Console()
 
@@ -181,6 +182,7 @@ def _scrape(url, settings):
             )
         if not listings:
             return []
+        listings = _maybe_limit(listings, settings)
         with _progress() as progress:
             task = progress.add_task("Pobieram opisy ofert...", total=len(listings))
             return scraper.add_descriptions(
@@ -189,6 +191,19 @@ def _scrape(url, settings):
             )
     finally:
         scraper.close()
+
+
+def _maybe_limit(listings, settings):
+    if settings.max_offers is not None or len(listings) <= LARGE_RESULT_SET:
+        return listings
+    console.print(
+        f"\n[yellow]Znalazłem {len(listings)} ofert.[/yellow] Pobranie opisów i analiza "
+        "wszystkich potrwa kilkanaście–kilkadziesiąt minut i zużyje dużo zapytań do API."
+    )
+    answer = Prompt.ask("Ile przeanalizować? (Enter = wszystkie)", default=str(len(listings))).strip()
+    if answer.isdigit() and int(answer) > 0:
+        return listings[: int(answer)]
+    return listings
 
 
 def _extract(analyzer, offers, plan):
