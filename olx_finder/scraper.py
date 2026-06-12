@@ -43,13 +43,15 @@ class OlxScraper:
         except WebDriverException:
             pass
 
-    def fetch_offers(self, search_url, max_offers=20, max_pages=5, on_page=None, on_offer=None):
+    def collect_listings(self, search_url, max_offers=None, max_pages=100, on_page=None):
         cards = self._collect_cards(search_url, max_offers, max_pages, on_page)
-        offers = []
-        for i, (title, price, url) in enumerate(cards, 1):
-            offers.append(Offer(title, price, url, self._description(url)))
+        return [Offer(title, price, url) for title, price, url in cards]
+
+    def add_descriptions(self, offers, on_offer=None):
+        for i, offer in enumerate(offers, 1):
+            offer.description = self._description(offer.url)
             if on_offer:
-                on_offer(i, len(cards))
+                on_offer(i, len(offers))
         return offers
 
     def _collect_cards(self, search_url, max_offers, max_pages, on_page):
@@ -70,11 +72,11 @@ class OlxScraper:
                 seen.add(parsed[2])
                 cards.append(parsed)
                 new += 1
-                if len(cards) >= max_offers:
+                if max_offers is not None and len(cards) >= max_offers:
                     break
             if on_page:
                 on_page(page, len(cards))
-            if len(cards) >= max_offers or new == 0:
+            if new == 0 or (max_offers is not None and len(cards) >= max_offers):
                 break
         return cards
 
@@ -86,6 +88,7 @@ class OlxScraper:
             )
             return element.text.strip()
         except (TimeoutException, WebDriverException):
+            log.info("No description found for %s", url)
             return ""
 
 

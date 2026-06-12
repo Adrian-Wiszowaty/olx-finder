@@ -52,7 +52,8 @@ def main(argv=None) -> int:
         console.print(Panel(str(error), title="Konfiguracja", border_style="red"))
         return 1
 
-    console.print(f"[dim]Silnik AI: {llm.name} ({llm.model})  •  oferty: {settings.max_offers}[/dim]\n")
+    limit = settings.max_offers if settings.max_offers is not None else "bez limitu"
+    console.print(f"[dim]Silnik AI: {llm.name} ({llm.model})  •  oferty: {limit}[/dim]\n")
     analyzer = OfferAnalyzer(llm)
     try:
         while _one_search(analyzer, settings):
@@ -91,7 +92,11 @@ def _one_search(analyzer, settings) -> bool:
         if not offers:
             console.print("[yellow]Nie znalazłem ofert pod tym linkiem.[/yellow]\n")
             return True
-        console.print(f"[green]Zebrano {len(offers)} ofert.[/green]")
+        note = ""
+        if settings.max_offers is not None and len(offers) >= settings.max_offers:
+            note = (f" [dim](osiągnięto limit {settings.max_offers} — "
+                    "usuń MAX_OFFERS z .env, aby pobrać wszystkie)[/dim]")
+        console.print(f"[green]Zebrano {len(offers)} ofert.[/green]{note}")
 
         offers = _extract(analyzer, offers, plan)
         with console.status("[cyan]Układam ranking...[/cyan]"):
@@ -164,16 +169,26 @@ def _progress():
 
 
 def _scrape(url, settings):
-    with get_scraper(url, settings) as scraper, _progress() as progress:
-        pages = progress.add_task("Przeglądam wyniki...", total=None)
-        details = progress.add_task("Pobieram opisy ofert...", total=None)
-        return scraper.fetch_offers(
-            url,
-            max_offers=settings.max_offers,
-            max_pages=settings.max_pages,
-            on_page=lambda p, n: progress.update(pages, description=f"Strona {p} — {n} ofert"),
-            on_offer=lambda done, total: progress.update(details, total=total, completed=done),
-        )
+    scraper = get_scraper(url, settings)
+    try:
+        with _progress() as progress:
+            task = progress.add_task("Przeglądam wyniki...", total=None)
+            listings = scraper.collect_listings(
+                url,
+                max_offers=settings.max_offers,
+                max_pages=settings.max_pages,
+                on_page=lambda p, n: progress.update(task, description=f"Strona {p} — {n} ofert"),
+            )
+        if not listings:
+            return []
+        with _progress() as progress:
+            task = progress.add_task("Pobieram opisy ofert...", total=len(listings))
+            return scraper.add_descriptions(
+                listings,
+                on_offer=lambda done, total: progress.update(task, completed=done, total=total),
+            )
+    finally:
+        scraper.close()
 
 
 def _extract(analyzer, offers, plan):

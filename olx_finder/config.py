@@ -16,8 +16,8 @@ class Settings:
     openai_model: str = "gpt-4o-mini"
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
-    max_offers: int = 20
-    max_pages: int = 5
+    max_offers: int | None = None
+    max_pages: int = 100
     headless: bool = True
 
     @classmethod
@@ -28,7 +28,7 @@ class Settings:
             openai_model=_clean(os.getenv("OPENAI_MODEL")) or cls.openai_model,
             gemini_api_key=_clean(os.getenv("GEMINI_API_KEY")),
             gemini_model=_clean(os.getenv("GEMINI_MODEL")) or cls.gemini_model,
-            max_offers=_int("MAX_OFFERS", cls.max_offers),
+            max_offers=_optional_int("MAX_OFFERS"),
             max_pages=_int("MAX_PAGES", cls.max_pages),
             headless=os.getenv("HEADLESS", "").strip().lower() not in ("false", "0", "no"),
         )
@@ -40,9 +40,14 @@ def _clean(value: str | None) -> str | None:
 
 
 def _int(name: str, default: int) -> int:
+    value = _optional_int(name)
+    return default if value is None else value
+
+
+def _optional_int(name: str) -> int | None:
     raw = _clean(os.getenv(name))
     if raw is None:
-        return default
+        return None
     try:
         return int(raw)
     except ValueError:
