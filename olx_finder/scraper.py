@@ -1,121 +1,120 @@
-from typing import List, Dict, Any
+import logging
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-from olx_finder.config import Config
+from selenium.webdriver.support.ui import WebDriverWait
+
+from olx_finder.config import USER_AGENT, Settings
+from olx_finder.models import Offer, OfferFinderError
+
+log = logging.getLogger(__name__)
 
 
-class Scraper:
-    def __init__(self, headless: bool = True, base_url: str = None, user_agent: str = None) -> None:
-        print("Szukanie ofert...")
-        self.BASE_URL: str = base_url or Config.OLX_URL
+class OlxScraper:
+    def __init__(self, headless: bool = True):
         options = Options()
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument(
-            f"user-agent={user_agent or Config.OLX_USER_AGENT}"
-        )
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--lang=pl-PL")
+        options.add_argument(f"user-agent={USER_AGENT}")
         if headless:
             options.add_argument("--headless=new")
+        try:
+            self.driver = webdriver.Chrome(options=options)
+        except WebDriverException as error:
+            raise OfferFinderError(
+                "Nie udało się uruchomić Chrome — sprawdź, czy przeglądarka jest zainstalowana."
+            ) from error
 
-        service = Service(ChromeDriverManager().install())
-        self.driver: webdriver.Chrome = webdriver.Chrome(service=service, options=options)
-
-    def close(self) -> None:
-        if hasattr(self, 'driver') and self.driver:
-            try:
-                self.driver.quit()
-            except Exception:
-                pass
-            self.driver = None
-
-    def __del__(self):
-        self.close()
-
-    def __enter__(self) -> 'Scraper':
+    def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *exc):
         self.close()
 
-    def _extract_offer_details(self, link: str) -> str:
-        self.driver.execute_script("window.open('about:blank','_blank');")
-        self.driver.switch_to.window(self.driver.window_handles[-1])
-        self.driver.get(link)
-
-        desc = ""
+    def close(self):
         try:
-            desc_el = WebDriverWait(self.driver, 5).until(
+            self.driver.quit()
+        except WebDriverException:
+            pass
+
+    def fetch_offers(self, search_url, max_offers=20, max_pages=5, on_page=None, on_offer=None):
+        cards = self._collect_cards(search_url, max_offers, max_pages, on_page)
+        offers = []
+        for i, (title, price, url) in enumerate(cards, 1):
+            offers.append(Offer(title, price, url, self._description(url)))
+            if on_offer:
+                on_offer(i, len(cards))
+        return offers
+
+    def _collect_cards(self, search_url, max_offers, max_pages, on_page):
+        cards, seen = [], set()
+        for page in range(1, max_pages + 1):
+            self.driver.get(_with_page(search_url, page))
+            try:
+                WebDriverWait(self.driver, 15).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-cy='l-card']"))
+                )
+            except TimeoutException:
+                break
+            new = 0
+            for card in self.driver.find_elements(By.CSS_SELECTOR, "div[data-cy='l-card']"):
+                parsed = _parse_card(card)
+                if parsed is None or parsed[2] in seen:
+                    continue
+                seen.add(parsed[2])
+                cards.append(parsed)
+                new += 1
+                if len(cards) >= max_offers:
+                    break
+            if on_page:
+                on_page(page, len(cards))
+            if len(cards) >= max_offers or new == 0:
+                break
+        return cards
+
+    def _description(self, url):
+        try:
+            self.driver.get(url)
+            element = WebDriverWait(self.driver, 6).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-cy='ad_description']"))
             )
-            desc = desc_el.text.strip()
-        except TimeoutException:
-            pass
-        finally:
-            self.driver.close()
-            self.driver.switch_to.window(self.driver.window_handles[0])
+            return element.text.strip()
+        except (TimeoutException, WebDriverException):
+            return ""
 
-        return desc
 
-    def fetch_offers(self) -> List[Dict[str, Any]]:
-        all_offers: List[Dict[str, Any]] = []
-        page = 1
+def get_scraper(url: str, settings: Settings) -> OlxScraper:
+    host = (urlsplit(url).hostname or "").lower()
+    if host == "olx.pl" or host.endswith(".olx.pl"):
+        return OlxScraper(headless=settings.headless)
+    raise OfferFinderError("Na razie obsługiwany jest tylko serwis OLX (olx.pl).")
 
-        try:
-            while True:
-                url = f"{self.BASE_URL}&page={page}"
-                self.driver.get(url)
 
-                try:
-                    WebDriverWait(self.driver, 20).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-cy='l-card']"))
-                    )
-                except TimeoutException:
-                    print(f"Brak ofert na stronie {page}.")
-                    break
+def _with_page(url: str, page: int) -> str:
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "page"]
+    query.append(("page", str(page)))
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
-                offers = self.driver.find_elements(By.CSS_SELECTOR, "div[data-cy='l-card']")
-                print(f"Strona {page} → znaleziono {len(offers)} ofert.")
 
-                if not offers:
-                    break
-
-                for offer in offers:
-                    try:
-                        title_el = offer.find_element(By.CSS_SELECTOR,
-                                                     "div[data-cy='ad-card-title'] h4, "
-                                                     "div[data-cy='ad-card-title'] h6")
-                        price_el = offer.find_element(By.CSS_SELECTOR, "p[data-testid='ad-price']")
-                        link_el = offer.find_element(By.CSS_SELECTOR, "div[data-cy='ad-card-title'] a")
-
-                        title = title_el.text.strip()
-                        price = price_el.text.strip()
-                        link = link_el.get_attribute("href")
-                        if not link.startswith("http"):
-                            link = "https://www.olx.pl" + link
-
-                        desc = self._extract_offer_details(link)
-
-                        all_offers.append({
-                            "title": title,
-                            "price": price,
-                            "link": link,
-                            "desc": desc,
-                        })
-                    except Exception:
-                        print("Nie udało się odczytać ofert:")
-                        print(offer.get_attribute("outerHTML"))
-                        continue
-
-                page += 1
-        finally:
-            while len(self.driver.window_handles) > 1:
-                self.driver.switch_to.window(self.driver.window_handles[-1])
-                self.driver.close()
-            self.driver.quit()
-            return all_offers
+def _parse_card(card):
+    try:
+        title = card.find_element(
+            By.CSS_SELECTOR, "div[data-cy='ad-card-title'] h4, div[data-cy='ad-card-title'] h6"
+        ).text.strip()
+        price = card.find_element(By.CSS_SELECTOR, "p[data-testid='ad-price']").text.strip()
+        link = card.find_element(By.CSS_SELECTOR, "div[data-cy='ad-card-title'] a")
+        url = link.get_attribute("href") or ""
+    except WebDriverException:
+        return None
+    if not title or not url:
+        return None
+    if not url.startswith("http"):
+        url = "https://www.olx.pl" + url
+    return title, price, url
