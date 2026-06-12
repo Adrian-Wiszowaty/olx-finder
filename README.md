@@ -1,50 +1,73 @@
-## Opis
-OLX Finder to narzędzie do automatycznego wyszukiwania, ekstrakcji i porównywania ofert komputerów gamingowych z serwisu OLX. Pozwala na pobranie ofert, wyciągnięcie specyfikacji technicznej z opisów oraz porównanie ich z użyciem AI (OpenAI).
+# OLX Finder
 
-## Najważniejsze funkcjonalności
-- Automatyczne pobieranie ofert z OLX (selenium)
-- Ekstrakcja specyfikacji z opisów ofert (AI)
-- Porównywanie ofert i wybór najlepszych (AI)
-- Konfigurowalne parametry wyszukiwania w pliku `config.py`
+Narzędzie wiersza poleceń, które pomaga wybrać najlepszą ofertę z wyników wyszukiwania OLX.
+Wklejasz link z wyszukiwania i opisujesz, co chcesz porównać (np. *„najlepszy stosunek ceny do
+specyfikacji dla laptopa gamingowego"*) — narzędzie pobiera ogłoszenia, używa LLM-a do wyciągnięcia
+istotnych szczegółów z opisów i generuje ranking. Potem możesz zadawać pytania uzupełniające.
+
+Kategoria produktu nie jest zahardkodowana — bo to LLM decyduje, na co zwrócić uwagę na podstawie
+Twojego celu. Ten sam przepływ działa dla komputerów, samochodów czy kurtek.
 
 ## Wymagania
+
 - Python 3.10+
-- selenium
-- webdriver-manager
-- openai
+- Google Chrome (Selenium steruje nim w tle)
+- Klucz do jednego z LLM-ów — Google Gemini (ma **darmowy** poziom) lub OpenAI
 
 ## Instalacja
+
 ```bash
 git clone https://github.com/Adrian-Wiszowaty/olx-finder.git
 cd olx-finder
-pip install selenium webdriver-manager openai
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
 ```
 
-## Konfiguracja
-Uzupełnij swój klucz OpenAI API w pliku `config.py`:
-```python
-OPENAI_API_KEY = "sk-..."
-```
-W przeglądarce wybierz interesujące Cię filtry na stronie OLX, a nastepnie wklej link do stałej OLX_BASE_URL.
+Otwórz `.env` i wklej klucz API. Darmowy klucz Gemini możesz wygenerować na
+<https://aistudio.google.com/apikey>.
 
 ## Uruchomienie
+
 ```bash
-python app.py
+python -m olx_finder
 ```
 
-## Przykład działania
-Po uruchomieniu program:
-1. Pobiera oferty komputerów z OLX (wg kryteriów z `config.py`)
-2. Wyciąga specyfikacje z opisów (AI)
-3. Porównuje oferty i wypisuje 5 najlepszych (AI)
+Postępuj zgodnie z instrukcjami: wklej link z wynikami OLX, opisz co chcesz porównać,
+a następnie przejrzyj ranking. Możesz zadawać pytania uzupełniające
+(np. *„pokaż top 10"*, *„który jest najcichszy?"*). Wpisz `nowa`, żeby zacząć nowe
+wyszukiwanie, lub `koniec`, żeby zakończyć.
 
-## Zrzuty ekranu
-![Widok skryptu](screenshot1.png)
+## Konfiguracja
 
-## Technologie
-- Python 3
-- Selenium, webdriver-manager
-- OpenAI API (GPT-4)
+Wszystkie ustawienia są w `.env` (patrz `.env.example`):
+
+| Zmienna | Domyślnie | Opis |
+|---|---|---|
+| `GEMINI_API_KEY` | — | Klucz Google Gemini (dostępny darmowy poziom) |
+| `OPENAI_API_KEY` | — | Klucz OpenAI |
+| `LLM_PROVIDER` | auto | Wymusza dostawcę: `gemini` lub `openai`. Gdy oba klucze są ustawione, domyślnie Gemini |
+| `MAX_OFFERS` | bez limitu | Ogranicz liczbę pobranych ofert dla szybszego działania |
+
+## Jak to działa
+
+```
+olx_finder/
+  config.py     ustawienia z .env
+  scraper.py    scrapowanie OLX przez Selenium
+  ai.py         klienty OpenAI / Gemini za jednym wspólnym interfejsem
+  prompts.py    prompty dla każdego etapu
+  analyzer.py   budowanie planu -> wyciąganie cech w paczkach -> sesja Q&A
+  cli.py        interaktywny przepływ
+```
+
+## Rozwój
+
+```bash
+pip install pytest
+pytest
+```
 
 ## Licencja
-MIT
+
+MIT — szczegóły w [LICENSE](LICENSE).
