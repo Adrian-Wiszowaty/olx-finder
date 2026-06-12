@@ -1,4 +1,6 @@
 selenium
 webdriver-manager
 openai
+google-genai
 python-dotenv
+rich

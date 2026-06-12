@@ -9,7 +9,7 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 from rich.prompt import Prompt
 
 from olx_finder import __version__
-from olx_finder.ai import get_client
+from olx_finder.ai import RateLimitError, get_client
 from olx_finder.analyzer import OfferAnalyzer
 from olx_finder.config import Settings
 from olx_finder.models import OfferFinderError
@@ -42,6 +42,8 @@ def main(argv=None) -> int:
 
     try:
         settings = Settings.from_env()
+        if args.provider:
+            settings.provider = args.provider
         if args.max_offers:
             settings.max_offers = args.max_offers
         console.print(Panel(WELCOME, title="OLX Finder", border_style="cyan"))
@@ -63,6 +65,7 @@ def main(argv=None) -> int:
 
 def _parse_args(argv):
     parser = argparse.ArgumentParser(prog="olx-finder", description="AI-powered analysis of OLX offers.")
+    parser.add_argument("--provider", choices=["gemini", "openai"], help="force an LLM provider")
     parser.add_argument("--max-offers", type=int, help="how many offers to analyze")
     parser.add_argument("--verbose", action="store_true", help="more logging")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -96,10 +99,17 @@ def _one_search(analyzer, settings) -> bool:
             verdict = session.ranking()
         console.print(Panel(Markdown(verdict), title="Werdykt AI", border_style="green"))
     except OfferFinderError as error:
-        console.print(f"[red]{error}[/red]\n")
+        console.print(f"[red]{_error_text(error)}[/red]\n")
         return True
 
     return _follow_up(session)
+
+
+def _error_text(error):
+    if isinstance(error, RateLimitError):
+        return ("Przekroczono limit zapytań do API (możliwe wyczerpanie dziennego "
+                "darmowego limitu Gemini). Spróbuj później albo zmniejsz MAX_OFFERS.")
+    return str(error)
 
 
 def _follow_up(session) -> bool:
@@ -119,7 +129,7 @@ def _follow_up(session) -> bool:
             with console.status("[cyan]Myślę...[/cyan]"):
                 answer = session.ask(question)
         except OfferFinderError as error:
-            console.print(f"[red]{error}[/red]")
+            console.print(f"[red]{_error_text(error)}[/red]")
             continue
         console.print(Panel(Markdown(answer), border_style="blue"))
 

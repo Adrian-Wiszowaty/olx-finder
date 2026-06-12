@@ -11,8 +11,11 @@ USER_AGENT = (
 
 @dataclass
 class Settings:
+    provider: str | None = None
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
     max_offers: int = 20
     max_pages: int = 5
     headless: bool = True
@@ -20,8 +23,11 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
+            provider=_clean(os.getenv("LLM_PROVIDER")),
             openai_api_key=_clean(os.getenv("OPENAI_API_KEY")),
             openai_model=_clean(os.getenv("OPENAI_MODEL")) or cls.openai_model,
+            gemini_api_key=_clean(os.getenv("GEMINI_API_KEY")),
+            gemini_model=_clean(os.getenv("GEMINI_MODEL")) or cls.gemini_model,
             max_offers=_int("MAX_OFFERS", cls.max_offers),
             max_pages=_int("MAX_PAGES", cls.max_pages),
             headless=os.getenv("HEADLESS", "").strip().lower() not in ("false", "0", "no"),
