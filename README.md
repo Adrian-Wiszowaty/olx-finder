@@ -20,7 +20,7 @@ Twojego celu. Ten sam przepływ działa dla komputerów, samochodów czy kurtek.
 git clone https://github.com/Adrian-Wiszowaty/olx-finder.git
 cd olx-finder
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 cp .env.example .env
 ```
 
@@ -30,7 +30,7 @@ Otwórz `.env` i wklej klucz API. Darmowy klucz Gemini możesz wygenerować na
 ## Uruchomienie
 
 ```bash
-python -m olx_finder
+olx-finder
 ```
 
 Postępuj zgodnie z instrukcjami: wklej link z wynikami OLX, opisz co chcesz porównać,

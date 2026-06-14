@@ -1,0 +1,24 @@
+[project]
+name = "olx-finder"
+version = "0.1.0"
+description = "Pick the best offer from an OLX search with the help of an LLM."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Adrian Wiszowaty" }]
+dependencies = [
+    "selenium>=4.20",
+    "openai>=1.40",
+    "google-genai>=1.0",
+    "python-dotenv>=1.0",
+    "rich>=13.7",
+]
+
+[project.scripts]
+olx-finder = "olx_finder.cli:main"
+
+[tool.setuptools]
+packages = ["olx_finder"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
