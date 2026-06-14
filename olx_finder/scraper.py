@@ -67,6 +67,8 @@ class OlxScraper:
                 break
             if page == 1:
                 total_pages = self._total_pages()
+            if total_pages is not None and page > total_pages:
+                total_pages = None
             new = 0
             for card in self.driver.find_elements(By.CSS_SELECTOR, "div[data-cy='l-card']"):
                 parsed = _parse_card(card)
@@ -77,7 +79,7 @@ class OlxScraper:
                 new += 1
                 if max_offers is not None and len(cards) >= max_offers:
                     break
-            if on_page:
+            if new > 0 and on_page:
                 on_page(page, len(cards), total_pages)
             if new == 0 or (max_offers is not None and len(cards) >= max_offers):
                 break

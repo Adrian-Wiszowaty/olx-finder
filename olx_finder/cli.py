@@ -182,6 +182,7 @@ def _scrape(url, settings):
                 task, description=f"Strona {p} — {n} ofert", completed=p, total=total
             ),
             )
+            progress.update(task, total=progress.tasks[task].completed)
         if not listings:
             return []
         listings = _maybe_limit(listings, settings)
@@ -210,7 +211,7 @@ def _maybe_limit(listings, settings):
 
 def _extract(analyzer, offers, plan):
     with _progress() as progress:
-        task = progress.add_task("Analizuję opisy (AI)...", total=None)
+        task = progress.add_task("Analizuję opisy (AI)...", total=len(offers))
         return analyzer.extract_specs(
             offers, plan,
             on_progress=lambda done, total: progress.update(task, total=total, completed=done),

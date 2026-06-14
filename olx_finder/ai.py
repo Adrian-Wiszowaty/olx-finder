@@ -27,6 +27,10 @@ class LLMClient:
                 return self._chat(messages, temperature)
             except RateLimitError:
                 time.sleep(5 * (attempt + 1))
+            except OfferFinderError:
+                raise
+            except Exception:
+                time.sleep(5 * (attempt + 1))
         return self._chat(messages, temperature)
 
     def _chat(self, messages, temperature):

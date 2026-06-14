@@ -46,4 +46,4 @@ def test_extract_specs_batches_and_maps_results_by_id(make_offer):
     assert offers[0].spec == {"cpu": "i5"}
     assert offers[2].spec == {"cpu": "i3"}
     assert offers[4].spec == {}
-    assert progress == [(1, 3), (2, 3), (3, 3)]
+    assert progress == [(2, 5), (4, 5), (5, 5)]

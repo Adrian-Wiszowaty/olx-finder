@@ -52,7 +52,7 @@ class OfferAnalyzer:
         for done, batch in enumerate(batches, 1):
             specs.update(self._extract_batch(batch, plan))
             if on_progress:
-                on_progress(done, len(batches))
+                on_progress(min(done * self.batch_size, len(indexed)), len(indexed))
         for i, offer in indexed:
             offer.spec = specs.get(i, {})
         return offers
