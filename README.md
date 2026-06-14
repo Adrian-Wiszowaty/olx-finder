@@ -24,27 +24,7 @@ graficzną i pamięć a dla kurtki materiał i rozmiar.
 
 ## Przykład
 
-```text
-$ olx-finder
-
-Wklej link z wynikami wyszukiwania na OLX: https://www.olx.pl/elektronika/komputery/...
-Co chcesz porównać w tych ofertach? komputer do gier — najlepszy stosunek ceny do podzespołów
-
-W każdej ofercie sprawdzę: CPU, GPU, RAM, dysk, zasilacz
-  Strona 2 — 65 ofert            ━━━━━━━━━━━━━━━━━━━━  2/2
-  Pobieram opisy ofert...        ━━━━━━━━━━━━━━━━━━━━  65/65
-Zebrano 65 ofert.
-  Analizuję opisy (AI)...        ━━━━━━━━━━━━━━━━━━━━  65/65
-
-╭──────────────────────────── Werdykt AI ─────────────────────────────╮
-│ 1. Ryzen 5 5600 + RTX 3060, 16 GB — 1850 zł                          │
-│    Najlepszy stosunek mocy do ceny w zestawieniu.                    │
-│ 2. i5-10400F + RTX 3060 Ti, 16 GB — 2100 zł                          │
-│    Mocniejsza karta, nieco drożej.                                   │
-╰──────────────────────────────────────────────────────────────────────╯
-
-Twoje pytanie: który ma najszybszy dysk?
-```
+![Zrzut ekranu z działania OLX Finder](images/screenshot.png)
 
 ## Jak to działa
 
