@@ -56,6 +56,7 @@ class OlxScraper:
 
     def _collect_cards(self, search_url, max_offers, max_pages, on_page):
         cards, seen = [], set()
+        total_pages = None
         for page in range(1, max_pages + 1):
             self.driver.get(_with_page(search_url, page))
             try:
@@ -64,6 +65,8 @@ class OlxScraper:
                 )
             except TimeoutException:
                 break
+            if page == 1:
+                total_pages = self._total_pages()
             new = 0
             for card in self.driver.find_elements(By.CSS_SELECTOR, "div[data-cy='l-card']"):
                 parsed = _parse_card(card)
@@ -75,10 +78,26 @@ class OlxScraper:
                 if max_offers is not None and len(cards) >= max_offers:
                     break
             if on_page:
-                on_page(page, len(cards))
+                on_page(page, len(cards), total_pages)
             if new == 0 or (max_offers is not None and len(cards) >= max_offers):
                 break
         return cards
+
+    def _total_pages(self):
+        try:
+            links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='page=']")
+            pages = []
+            for link in links:
+                href = link.get_attribute("href") or ""
+                for k, v in parse_qsl(urlsplit(href).query):
+                    if k == "page":
+                        try:
+                            pages.append(int(v))
+                        except ValueError:
+                            pass
+            return max(pages) if pages else None
+        except WebDriverException:
+            return None
 
     def _description(self, url):
         try:

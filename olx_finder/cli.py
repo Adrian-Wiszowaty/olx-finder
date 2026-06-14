@@ -178,7 +178,9 @@ def _scrape(url, settings):
                 url,
                 max_offers=settings.max_offers,
                 max_pages=settings.max_pages,
-                on_page=lambda p, n: progress.update(task, description=f"Strona {p} — {n} ofert"),
+                on_page=lambda p, n, total: progress.update(
+                task, description=f"Strona {p} — {n} ofert", completed=p, total=total
+            ),
             )
         if not listings:
             return []
