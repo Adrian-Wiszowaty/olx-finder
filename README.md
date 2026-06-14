@@ -1,18 +1,84 @@
 # OLX Finder
 
 Narzędzie wiersza poleceń, które pomaga wybrać najlepszą ofertę z wyników wyszukiwania OLX.
-Wklejasz link z wyszukiwania i opisujesz, co chcesz porównać (np. *„najlepszy stosunek ceny do
-specyfikacji dla laptopa gamingowego"*) — narzędzie pobiera ogłoszenia, używa LLM-a do wyciągnięcia
-istotnych szczegółów z opisów i generuje ranking. Potem możesz zadawać pytania uzupełniające.
+Wklejasz link, opisujesz czego szukasz, a aplikacja pobiera ogłoszenia, wyciąga z opisów
+istotne parametry za pomocą modelu językowego (LLM) i układa z nich ranking. Potem możesz
+dopytywać o szczegóły jak w zwykłej rozmowie.
 
-Kategoria produktu nie jest zahardkodowana — bo to LLM decyduje, na co zwrócić uwagę na podstawie
-Twojego celu. Ten sam przepływ działa dla komputerów, samochodów czy kurtek.
+## Skąd pomysł
+
+Zaczęło się od prozaicznego problemu: chciałem kupić używany komputer w określonym budżecie,
+ale na OLX było kilkaset ofert i ręczne porównywanie podzespołów z
+opisów zajełoby zbyt dużo czasu. Napisałem więc prosty skrypt, który pobierał ogłoszenia i zwracał najkorzystniejsze aukcje.
+
+Z czasem skrypt rozrósł się w narzędzie, które nie jest ograniczone kodem do jednej kategorii — bo to
+model językowy decyduje, na co zwrócić uwagę. Dla komputera sam wybierze procesor, kartę
+graficzną i pamięć a dla kurtki materiał i rozmiar.
+
+## Co potrafi
+
+- Pobiera wszystkie strony wyników z podanego linku, razem z pełnymi opisami ogłoszeń.
+- Sam ustala, jakie cechy warto porównać — na podstawie Twojego celu.
+- Wyciąga te cechy z opisów i buduje ranking ofert najlepiej pasujących do tego, czego szukasz.
+- Pozwala dopytywać o już zwrócone wyniki.
+
+## Przykład
+
+```text
+$ olx-finder
+
+Wklej link z wynikami wyszukiwania na OLX: https://www.olx.pl/elektronika/komputery/...
+Co chcesz porównać w tych ofertach? komputer do gier — najlepszy stosunek ceny do podzespołów
+
+W każdej ofercie sprawdzę: CPU, GPU, RAM, dysk, zasilacz
+  Strona 2 — 65 ofert            ━━━━━━━━━━━━━━━━━━━━  2/2
+  Pobieram opisy ofert...        ━━━━━━━━━━━━━━━━━━━━  65/65
+Zebrano 65 ofert.
+  Analizuję opisy (AI)...        ━━━━━━━━━━━━━━━━━━━━  65/65
+
+╭──────────────────────────── Werdykt AI ─────────────────────────────╮
+│ 1. Ryzen 5 5600 + RTX 3060, 16 GB — 1850 zł                          │
+│    Najlepszy stosunek mocy do ceny w zestawieniu.                    │
+│ 2. i5-10400F + RTX 3060 Ti, 16 GB — 2100 zł                          │
+│    Mocniejsza karta, nieco drożej.                                   │
+╰──────────────────────────────────────────────────────────────────────╯
+
+Twoje pytanie: który ma najszybszy dysk?
+```
+
+## Jak to działa
+
+Aplikacja prowadzi cię przez cztery etapy:
+
+1. **Plan** — LLM dostaje Twój cel i link, po czym zwraca listę cech do porównania
+   (np. dla komputera: CPU, GPU, RAM, dysk).
+2. **Pobieranie** — Selenium zbiera ogłoszenia ze wszystkich stron wyników i wchodzi w każde
+   po pełny opis.
+3. **Ekstrakcja** — opisy trafiają do modelu w paczkach, a ten zwraca ustrukturyzowane dane
+   (JSON) z wartościami poszczególnych cech.
+4. **Ranking i pytania** — na podstawie zebranych danych LLM układa ranking i odpowiada na
+   kolejne pytania w obrębie jednej sesji, pamiętając kontekst.
+
+Dostawca LLM i serwis aukcyjny są schowane za wspólnymi interfejsami (`LLMClient`,
+`OlxScraper`), więc dołożenie innego modelu albo kolejnego portalu sprowadza się do napisania
+jednej klasy — reszta przepływu zostaje bez zmian.
+
+```text
+olx_finder/
+  config.py     ustawienia wczytywane z .env
+  models.py     wspólne struktury danych (Offer, AnalysisPlan)
+  scraper.py    pobieranie ogłoszeń z OLX przez Selenium
+  ai.py         klienci OpenAI i Gemini za jednym interfejsem, z ponawianiem zapytań
+  prompts.py    prompty dla każdego etapu
+  analyzer.py   plan -> ekstrakcja cech w paczkach -> sesja pytań i odpowiedzi
+  cli.py        interaktywny przepływ w terminalu
+```
 
 ## Wymagania
 
 - Python 3.10+
 - Google Chrome (Selenium steruje nim w tle)
-- Klucz do jednego z LLM-ów — Google Gemini (ma **darmowy** poziom) lub OpenAI
+- Klucz API do jednego z LLM-ów — Google Gemini (darmowy) lub OpenAI
 
 ## Instalacja
 
@@ -24,7 +90,7 @@ pip install -e .
 cp .env.example .env
 ```
 
-Otwórz `.env` i wklej klucz API. Darmowy klucz Gemini możesz wygenerować na
+Otwórz `.env` i wklej klucz API. Darmowy klucz Gemini wygenerujesz na
 <https://aistudio.google.com/apikey>.
 
 ## Uruchomienie
@@ -33,35 +99,31 @@ Otwórz `.env` i wklej klucz API. Darmowy klucz Gemini możesz wygenerować na
 olx-finder
 ```
 
-Postępuj zgodnie z instrukcjami: wklej link z wynikami OLX, opisz co chcesz porównać,
-a następnie przejrzyj ranking. Możesz zadawać pytania uzupełniające
-(np. *„pokaż top 10"*, *„który jest najcichszy?"*). Wpisz `nowa`, żeby zacząć nowe
-wyszukiwanie, lub `koniec`, żeby zakończyć.
+Dalej wystarczy iść za instrukcjami: wklejasz link z wynikami OLX, opisujesz co chcesz
+porównać i przeglądasz ranking. Możesz dopytywać (*„pokaż top 10"*, *„który najcichszy?"*),
+wpisać `nowa`, żeby zacząć kolejne wyszukiwanie, albo `koniec`, żeby wyjść.
+
+Najczęstsze opcje można też podać jako flagi, które nadpisują ustawienia z `.env`:
+
+```bash
+olx-finder --provider openai --max-offers 20
+```
 
 ## Konfiguracja
 
-Wszystkie ustawienia są w `.env` (patrz `.env.example`):
+Ustawienia trzymane są w `.env` (wzór w `.env.example`):
 
 | Zmienna | Domyślnie | Opis |
 |---|---|---|
 | `GEMINI_API_KEY` | — | Klucz Google Gemini (dostępny darmowy poziom) |
 | `OPENAI_API_KEY` | — | Klucz OpenAI |
-| `LLM_PROVIDER` | auto | Wymusza dostawcę: `gemini` lub `openai`. Gdy oba klucze są ustawione, domyślnie Gemini |
-| `MAX_OFFERS` | bez limitu | Ogranicz liczbę pobranych ofert dla szybszego działania |
+| `LLM_PROVIDER` | auto | Wymusza dostawcę: `gemini` lub `openai`. Gdy oba klucze są ustawione, domyślnie wybierany jest OpenAI |
+| `MAX_OFFERS` | bez limitu | Ogranicza liczbę pobranych ofert — przydatne do szybkich testów |
 
-## Jak to działa
+Dostępne są też rzadziej potrzebne zmienne (`MAX_PAGES`, `HEADLESS`, `OPENAI_MODEL`,
+`GEMINI_MODEL`) — szczegóły w `config.py`.
 
-```
-olx_finder/
-  config.py     ustawienia z .env
-  scraper.py    scrapowanie OLX przez Selenium
-  ai.py         klienty OpenAI / Gemini za jednym wspólnym interfejsem
-  prompts.py    prompty dla każdego etapu
-  analyzer.py   budowanie planu -> wyciąganie cech w paczkach -> sesja Q&A
-  cli.py        interaktywny przepływ
-```
-
-## Rozwój
+## Testy
 
 ```bash
 pip install pytest

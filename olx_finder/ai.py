@@ -4,8 +4,15 @@ from dataclasses import dataclass
 from olx_finder.config import Settings
 from olx_finder.models import OfferFinderError
 
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 5
+
 
 class RateLimitError(OfferFinderError):
+    pass
+
+
+class InsufficientQuotaError(OfferFinderError):
     pass
 
 
@@ -22,16 +29,16 @@ class LLMClient:
         self.model = model
 
     def complete(self, messages, temperature=0.2):
-        for attempt in range(2):
+        for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
                 return self._chat(messages, temperature)
-            except RateLimitError:
-                time.sleep(5 * (attempt + 1))
-            except OfferFinderError:
-                raise
+            except OfferFinderError as error:
+                if not isinstance(error, RateLimitError) or attempt == MAX_ATTEMPTS:
+                    raise
             except Exception:
-                time.sleep(5 * (attempt + 1))
-        return self._chat(messages, temperature)
+                if attempt == MAX_ATTEMPTS:
+                    raise
+            time.sleep(RETRY_BACKOFF_SECONDS * attempt)
 
     def _chat(self, messages, temperature):
         raise NotImplementedError
@@ -56,7 +63,7 @@ class OpenAIClient(LLMClient):
             )
         except self._openai.RateLimitError as error:
             if getattr(error, "code", None) == "insufficient_quota":
-                raise OfferFinderError(
+                raise InsufficientQuotaError(
                     "Brak środków na koncie OpenAI. Doładuj konto albo użyj "
                     "darmowego klucza Gemini: https://aistudio.google.com/apikey"
                 ) from error
@@ -111,7 +118,7 @@ def get_client(settings: Settings):
                 "Nie znaleziono klucza API. Wpisz w pliku .env GEMINI_API_KEY "
                 "(darmowy: https://aistudio.google.com/apikey) albo OPENAI_API_KEY."
             )
-        provider = "gemini" if settings.gemini_api_key else "openai"
+        provider = "openai" if settings.openai_api_key else "gemini"
 
     if provider == "gemini":
         if not settings.gemini_api_key:

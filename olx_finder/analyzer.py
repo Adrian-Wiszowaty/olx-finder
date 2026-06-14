@@ -4,15 +4,15 @@ import re
 
 from olx_finder import prompts
 from olx_finder.ai import Message
-from olx_finder.models import AnalysisPlan
+from olx_finder.models import AnalysisPlan, Offer
 
 log = logging.getLogger(__name__)
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
 
 
-def parse_json(text):
-    candidates = [m.strip() for m in _FENCE.findall(text)]
+def parse_json(text: str):
+    candidates = [match.strip() for match in _FENCE.findall(text)]
     candidates.append(text.strip())
     stripped = text.strip()
     slices = []
@@ -36,7 +36,7 @@ class OfferAnalyzer:
         self.llm = llm
         self.batch_size = batch_size
 
-    def build_plan(self, goal, search_url):
+    def build_plan(self, goal: str, search_url: str) -> AnalysisPlan:
         reply = self.llm.complete([Message("user", prompts.plan_prompt(goal, search_url))])
         data = parse_json(reply)
         if not isinstance(data, dict):
@@ -45,7 +45,7 @@ class OfferAnalyzer:
         attributes = [str(a).strip() for a in data.get("attributes", []) if str(a).strip()]
         return AnalysisPlan(attributes[:10], str(data.get("guidance") or "").strip())
 
-    def extract_specs(self, offers, plan, on_progress=None):
+    def extract_specs(self, offers: list[Offer], plan: AnalysisPlan, on_progress=None) -> list[Offer]:
         indexed = list(enumerate(offers, 1))
         batches = [indexed[i : i + self.batch_size] for i in range(0, len(indexed), self.batch_size)]
         specs = {}
@@ -76,7 +76,7 @@ class OfferAnalyzer:
                 specs[offer_id] = {k: v for k, v in item.items() if k != "id"}
         return specs
 
-    def start_session(self, goal, plan, offers):
+    def start_session(self, goal: str, plan: AnalysisPlan, offers: list[Offer]) -> "AnalysisSession":
         return AnalysisSession(self.llm, prompts.session_prompt(goal, plan, offers))
 
 

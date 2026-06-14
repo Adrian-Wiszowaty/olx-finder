@@ -9,7 +9,7 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 from rich.prompt import Prompt
 
 from olx_finder import __version__
-from olx_finder.ai import RateLimitError, get_client
+from olx_finder.ai import GeminiClient, InsufficientQuotaError, RateLimitError, get_client
 from olx_finder.analyzer import OfferAnalyzer
 from olx_finder.config import Settings
 from olx_finder.models import OfferFinderError
@@ -33,6 +33,37 @@ Jak to działa:
 W każdej chwili wpisz „koniec”, aby zakończyć."""
 
 
+class _FallbackClient:
+    def __init__(self, primary, fallback, on_switch):
+        self._active = primary
+        self._fallback = fallback
+        self._on_switch = on_switch
+
+    @property
+    def name(self):
+        return self._active.name
+
+    @property
+    def model(self):
+        return self._active.model
+
+    def complete(self, messages, temperature=0.2):
+        try:
+            return self._active.complete(messages, temperature)
+        except InsufficientQuotaError:
+            if self._active is self._fallback:
+                raise
+            self._on_switch()
+            self._active = self._fallback
+            return self._active.complete(messages, temperature)
+
+
+def _announce_fallback():
+    console.print(
+        "\n[yellow]Brak środków na koncie OpenAI — przełączam się na Gemini.[/yellow]"
+    )
+
+
 def main(argv=None) -> int:
     args = _parse_args(argv)
     logging.basicConfig(
@@ -49,6 +80,9 @@ def main(argv=None) -> int:
             settings.max_offers = args.max_offers
         console.print(Panel(WELCOME, title="OLX Finder", border_style="cyan"))
         llm = get_client(settings)
+        if llm.name == "OpenAI" and settings.gemini_api_key:
+            gemini = GeminiClient(settings.gemini_api_key, settings.gemini_model)
+            llm = _FallbackClient(llm, gemini, on_switch=_announce_fallback)
     except OfferFinderError as error:
         console.print(Panel(str(error), title="Konfiguracja", border_style="red"))
         return 1
@@ -93,11 +127,7 @@ def _one_search(analyzer, settings) -> bool:
         if not offers:
             console.print("[yellow]Nie znalazłem ofert pod tym linkiem.[/yellow]\n")
             return True
-        note = ""
-        if settings.max_offers is not None and len(offers) >= settings.max_offers:
-            note = (f" [dim](osiągnięto limit {settings.max_offers} — "
-                    "usuń MAX_OFFERS z .env, aby pobrać wszystkie)[/dim]")
-        console.print(f"[green]Zebrano {len(offers)} ofert.[/green]{note}")
+        console.print(f"[green]Zebrano {len(offers)} ofert.[/green]{_limit_note(len(offers), settings)}")
 
         offers = _extract(analyzer, offers, plan)
         with console.status("[cyan]Układam ranking...[/cyan]"):
@@ -109,6 +139,13 @@ def _one_search(analyzer, settings) -> bool:
         return True
 
     return _follow_up(session)
+
+
+def _limit_note(count, settings) -> str:
+    if settings.max_offers is None or count < settings.max_offers:
+        return ""
+    return (f" [dim](osiągnięto limit {settings.max_offers} — "
+            "usuń MAX_OFFERS z .env, aby pobrać wszystkie)[/dim]")
 
 
 def _error_text(error):
@@ -172,41 +209,53 @@ def _progress():
 def _scrape(url, settings):
     scraper = get_scraper(url, settings)
     try:
-        with _progress() as progress:
-            task = progress.add_task("Przeglądam wyniki...", total=None)
-            listings = scraper.collect_listings(
-                url,
-                max_offers=settings.max_offers,
-                max_pages=settings.max_pages,
-                on_page=lambda p, n, total: progress.update(
-                task, description=f"Strona {p} — {n} ofert", completed=p, total=total
-            ),
-            )
-            progress.update(task, total=progress.tasks[task].completed)
-        if not listings:
+        offers = _collect_offers(scraper, url, settings)
+        if not offers:
             return []
-        listings = _maybe_limit(listings, settings)
-        with _progress() as progress:
-            task = progress.add_task("Pobieram opisy ofert...", total=len(listings))
-            return scraper.add_descriptions(
-                listings,
-                on_offer=lambda done, total: progress.update(task, completed=done, total=total),
-            )
+        offers = _maybe_limit(offers, settings)
+        return _fetch_descriptions(scraper, offers)
     finally:
         scraper.close()
 
 
-def _maybe_limit(listings, settings):
-    if settings.max_offers is not None or len(listings) <= LARGE_RESULT_SET:
-        return listings
+def _collect_offers(scraper, url, settings):
+    with _progress() as progress:
+        task = progress.add_task("Przeglądam wyniki...", total=None)
+
+        def on_page(page, found, total_pages):
+            progress.update(
+                task, description=f"Strona {page} — {found} ofert",
+                completed=page, total=total_pages,
+            )
+
+        offers = scraper.collect_listings(
+            url, max_offers=settings.max_offers, max_pages=settings.max_pages, on_page=on_page
+        )
+        progress.update(task, total=progress.tasks[task].completed)
+    return offers
+
+
+def _fetch_descriptions(scraper, offers):
+    with _progress() as progress:
+        task = progress.add_task("Pobieram opisy ofert...", total=len(offers))
+
+        def on_offer(done, total):
+            progress.update(task, completed=done, total=total)
+
+        return scraper.add_descriptions(offers, on_offer=on_offer)
+
+
+def _maybe_limit(offers, settings):
+    if settings.max_offers is not None or len(offers) <= LARGE_RESULT_SET:
+        return offers
     console.print(
-        f"\n[yellow]Znalazłem {len(listings)} ofert.[/yellow] Pobranie opisów i analiza "
+        f"\n[yellow]Znalazłem {len(offers)} ofert.[/yellow] Pobranie opisów i analiza "
         "wszystkich potrwa kilkanaście–kilkadziesiąt minut i zużyje dużo zapytań do API."
     )
-    answer = Prompt.ask("Ile przeanalizować? (Enter = wszystkie)", default=str(len(listings))).strip()
+    answer = Prompt.ask("Ile przeanalizować? (Enter = wszystkie)", default=str(len(offers))).strip()
     if answer.isdigit() and int(answer) > 0:
-        return listings[: int(answer)]
-    return listings
+        return offers[: int(answer)]
+    return offers
 
 
 def _extract(analyzer, offers, plan):

@@ -1,6 +1,6 @@
 import pytest
 
-from olx_finder.ai import LLMClient, Message
+from olx_finder.ai import LLMClient
 from olx_finder.models import Offer
 
 

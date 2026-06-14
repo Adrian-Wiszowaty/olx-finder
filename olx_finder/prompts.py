@@ -50,14 +50,14 @@ Rules:
 def session_prompt(goal: str, plan: AnalysisPlan, offers: list[Offer]) -> str:
     dataset = [
         {
-            "id": i,
-            "title": o.title,
-            "price": o.price,
-            "url": o.url,
-            "attributes": o.spec,
-            "description_excerpt": o.description[:DATASET_LIMIT],
+            "id": index,
+            "title": offer.title,
+            "price": offer.price,
+            "url": offer.url,
+            "attributes": offer.spec,
+            "description_excerpt": offer.description[:DATASET_LIMIT],
         }
-        for i, o in enumerate(offers, 1)
+        for index, offer in enumerate(offers, 1)
     ]
     guidance = f"\nHow to judge them: {plan.guidance}" if plan.guidance else ""
     return f"""\

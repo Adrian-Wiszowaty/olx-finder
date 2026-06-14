@@ -12,9 +12,9 @@ def test_no_keys_raises_with_setup_hint():
     assert "GEMINI_API_KEY" in str(exc.value)
 
 
-def test_prefers_gemini_when_both_keys_present():
+def test_prefers_openai_when_both_keys_present():
     client = get_client(Settings(gemini_api_key="g", openai_api_key="o"))
-    assert client.name == "Gemini"
+    assert client.name == "OpenAI"
 
 
 def test_explicit_provider_overrides_auto_detect():

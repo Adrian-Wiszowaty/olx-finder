@@ -13,6 +13,8 @@ from olx_finder.models import Offer, OfferFinderError
 
 log = logging.getLogger(__name__)
 
+CARD_SELECTOR = "div[data-cy='l-card']"
+
 
 class OlxScraper:
     def __init__(self, headless: bool = True):
@@ -43,65 +45,60 @@ class OlxScraper:
         except WebDriverException:
             pass
 
-    def collect_listings(self, search_url, max_offers=None, max_pages=100, on_page=None):
-        cards = self._collect_cards(search_url, max_offers, max_pages, on_page)
-        return [Offer(title, price, url) for title, price, url in cards]
-
-    def add_descriptions(self, offers, on_offer=None):
-        for i, offer in enumerate(offers, 1):
-            offer.description = self._description(offer.url)
-            if on_offer:
-                on_offer(i, len(offers))
-        return offers
-
-    def _collect_cards(self, search_url, max_offers, max_pages, on_page):
-        cards, seen = [], set()
+    def collect_listings(self, search_url, max_offers=None, max_pages=100, on_page=None) -> list[Offer]:
+        offers, seen = [], set()
         total_pages = None
         for page in range(1, max_pages + 1):
-            self.driver.get(_with_page(search_url, page))
-            try:
-                WebDriverWait(self.driver, 15).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-cy='l-card']"))
-                )
-            except TimeoutException:
+            if not self._open_results(_with_page(search_url, page)):
                 break
             if page == 1:
                 total_pages = self._total_pages()
             if total_pages is not None and page > total_pages:
                 total_pages = None
-            new = 0
-            for card in self.driver.find_elements(By.CSS_SELECTOR, "div[data-cy='l-card']"):
-                parsed = _parse_card(card)
-                if parsed is None or parsed[2] in seen:
-                    continue
-                seen.add(parsed[2])
-                cards.append(parsed)
-                new += 1
-                if max_offers is not None and len(cards) >= max_offers:
-                    break
-            if new > 0 and on_page:
-                on_page(page, len(cards), total_pages)
-            if new == 0 or (max_offers is not None and len(cards) >= max_offers):
-                break
-        return cards
 
-    def _total_pages(self):
+            found = 0
+            for element in self.driver.find_elements(By.CSS_SELECTOR, CARD_SELECTOR):
+                offer = _parse_card(element)
+                if offer is None or offer.url in seen:
+                    continue
+                seen.add(offer.url)
+                offers.append(offer)
+                found += 1
+                if max_offers is not None and len(offers) >= max_offers:
+                    break
+
+            if found and on_page:
+                on_page(page, len(offers), total_pages)
+            if not found or (max_offers is not None and len(offers) >= max_offers):
+                break
+        return offers
+
+    def add_descriptions(self, offers: list[Offer], on_offer=None) -> list[Offer]:
+        for index, offer in enumerate(offers, 1):
+            offer.description = self._fetch_description(offer.url)
+            if on_offer:
+                on_offer(index, len(offers))
+        return offers
+
+    def _open_results(self, url: str) -> bool:
+        self.driver.get(url)
+        try:
+            WebDriverWait(self.driver, 15).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, CARD_SELECTOR))
+            )
+            return True
+        except TimeoutException:
+            return False
+
+    def _total_pages(self) -> int | None:
         try:
             links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='page=']")
-            pages = []
-            for link in links:
-                href = link.get_attribute("href") or ""
-                for k, v in parse_qsl(urlsplit(href).query):
-                    if k == "page":
-                        try:
-                            pages.append(int(v))
-                        except ValueError:
-                            pass
-            return max(pages) if pages else None
         except WebDriverException:
             return None
+        pages = [page for link in links if (page := _page_param(link.get_attribute("href") or ""))]
+        return max(pages, default=None)
 
-    def _description(self, url):
+    def _fetch_description(self, url: str) -> str:
         try:
             self.driver.get(url)
             element = WebDriverWait(self.driver, 6).until(
@@ -122,12 +119,19 @@ def get_scraper(url: str, settings: Settings) -> OlxScraper:
 
 def _with_page(url: str, page: int) -> str:
     parts = urlsplit(url)
-    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "page"]
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "page"]
     query.append(("page", str(page)))
     return urlunsplit(parts._replace(query=urlencode(query)))
 
 
-def _parse_card(card):
+def _page_param(url: str) -> int | None:
+    for key, value in parse_qsl(urlsplit(url).query):
+        if key == "page" and value.isdigit():
+            return int(value)
+    return None
+
+
+def _parse_card(card) -> Offer | None:
     try:
         title = card.find_element(
             By.CSS_SELECTOR, "div[data-cy='ad-card-title'] h4, div[data-cy='ad-card-title'] h6"
@@ -141,4 +145,4 @@ def _parse_card(card):
         return None
     if not url.startswith("http"):
         url = "https://www.olx.pl" + url
-    return title, price, url
+    return Offer(title, price, url)

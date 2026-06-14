@@ -1,4 +1,6 @@
 import olx_finder.cli as cli
+from conftest import FakeLLM
+from olx_finder.ai import InsufficientQuotaError, Message
 from olx_finder.config import Settings
 
 
@@ -41,3 +43,16 @@ def test_large_set_keeps_everything_when_answer_is_not_a_number(monkeypatch):
     _fake_prompt(monkeypatch, "wszystkie")
     listings = list(range(830))
     assert cli._maybe_limit(listings, Settings()) == listings
+
+
+def test_fallback_switches_to_gemini_then_stays_on_it():
+    switches = []
+    primary = FakeLLM([InsufficientQuotaError("no funds")])
+    fallback = FakeLLM(["from fallback", "second answer"])
+    client = cli._FallbackClient(primary, fallback, on_switch=lambda: switches.append(1))
+
+    assert client.complete([Message("user", "hi")]) == "from fallback"
+    assert client.complete([Message("user", "again")]) == "second answer"
+
+    assert switches == [1]
+    assert len(primary.calls) == 1
