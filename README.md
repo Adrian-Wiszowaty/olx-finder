@@ -1,5 +1,7 @@
 # OLX Finder
 
+![CI](https://github.com/Adrian-Wiszowaty/olx-finder/actions/workflows/ci.yml/badge.svg)
+
 Narzędzie wiersza poleceń, które pomaga wybrać najlepszą ofertę z wyników wyszukiwania OLX.
 Wklejasz link, opisujesz czego szukasz, a aplikacja pobiera ogłoszenia, wyciąga z opisów
 istotne parametry za pomocą modelu językowego (LLM) i układa z nich ranking. Potem możesz
