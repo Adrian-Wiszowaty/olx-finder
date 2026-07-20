@@ -1,3 +1,5 @@
+**🇵🇱 Polski** | [🇬🇧 English](README.en.md)
+
 # OLX Finder
 
 ![CI](https://github.com/Adrian-Wiszowaty/olx-finder/actions/workflows/ci.yml/badge.svg)
