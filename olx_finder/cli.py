@@ -112,7 +112,8 @@ def _one_search(analyzer, settings) -> bool:
     if url is None:
         return False
     goal = _ask("\n[bold #56C8D8]Co chcesz porównać w tych ofertach?[/bold #56C8D8] "
-                "[dim](np. „komputer do gier — najlepszy stosunek ceny do podzespołów”)[/dim]")
+                "[dim](np. „komputer do gier — najlepszy stosunek ceny do podzespołów”):[/dim]",
+                own_line=True)
     if goal is None:
         return False
 
@@ -172,9 +173,13 @@ def _follow_up(session) -> bool:
         console.print(Panel(Markdown(answer), border_style="blue"))
 
 
-def _ask(prompt) -> str | None:
+def _ask(prompt, own_line=False) -> str | None:
     while True:
-        text = Prompt.ask(prompt).strip()
+        if own_line:
+            console.print(prompt)
+            text = console.input().strip()
+        else:
+            text = Prompt.ask(prompt).strip()
         if text.lower() in EXIT_WORDS:
             return None
         if text:
@@ -183,7 +188,7 @@ def _ask(prompt) -> str | None:
 
 def _ask_url() -> str | None:
     while True:
-        url = _ask("[bold #56C8D8]Wklej link z wynikami wyszukiwania na OLX[/bold #56C8D8]")
+        url = _ask("[bold #56C8D8]Wklej link z wynikami wyszukiwania na OLX:[/bold #56C8D8]", own_line=True)
         if url is None:
             return None
         if not url.startswith(("http://", "https://")):
