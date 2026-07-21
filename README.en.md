@@ -29,9 +29,7 @@ out CPU, GPU, and RAM on its own; for a jacket, material and size.
 
 ## Example
 
-![Screenshot of OLX Finder running — searching and fetching offers](images/screenshot-search.png)
-
-![Screenshot of OLX Finder running — AI verdict](images/screenshot-verdict.png)
+![Screenshot of OLX Finder running](images/screenshot.png)
 
 ## How it works
 

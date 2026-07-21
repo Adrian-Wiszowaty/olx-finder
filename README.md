@@ -28,9 +28,7 @@ graficzną i pamięć a dla kurtki materiał i rozmiar.
 
 ## Przykład
 
-![Zrzut ekranu z działania OLX Finder — wyszukiwanie i pobieranie ofert](images/screenshot-search.png)
-
-![Zrzut ekranu z działania OLX Finder — werdykt AI](images/screenshot-verdict.png)
+![Zrzut ekranu z działania OLX Finder](images/screenshot.png)
 
 ## Jak to działa
 
