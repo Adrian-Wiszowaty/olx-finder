@@ -71,13 +71,25 @@ Offers (JSON):
 
 Rules:
 - Base every answer only on the offers above. If something is missing, say so.
+- The "id" field is internal bookkeeping only — never show it to the user as an
+  "offer number". When you rank or list a subset of offers, number that subset
+  1, 2, 3... by its own order, and refer back to those same numbers everywhere
+  else in your answer (e.g. in an overall recommendation).
 - When recommending offers, always include the title, price and URL.
 - Answer in the user's language and be concise; use Markdown lists for rankings."""
 
 
 def ranking_prompt(top_n: int) -> str:
     return (
-        f"Rank the offers against my goal and show the top {top_n} (best first). "
-        "For each give the position, title, price, URL and a one-sentence reason. "
-        "End with a short overall recommendation."
+        f"Rank the offers against my goal and show the top {top_n} (best first), "
+        f"numbered 1 to {top_n} by rank — not by their id in the offers dataset. "
+        "For each give the rank number, title, price, URL and a one-sentence reason.\n\n"
+        "Then end with an overall recommendation of exactly 3 sentences that argues the "
+        "choice in depth, using concrete details from the offers (not generic praise): "
+        "explain what actually makes offer 1 the best pick, and explicitly weigh it "
+        "against the runner-up — say plainly whether offer 1 clearly beats offer 2, "
+        "whether they are practically tied, or whether several of the top picks are "
+        "essentially equivalent and it barely matters which one the user takes. Refer "
+        "back to the same rank numbers (e.g. \"offer 2\"), never the dataset id. Give "
+        "the single most useful, decisive answer you can, not a vague summary."
     )

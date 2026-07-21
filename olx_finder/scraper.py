@@ -45,7 +45,7 @@ class OlxScraper:
         except WebDriverException:
             pass
 
-    def collect_listings(self, search_url, max_offers=None, max_pages=100, on_page=None) -> list[Offer]:
+    def collect_listings(self, search_url, max_pages=100, on_page=None) -> list[Offer]:
         offers, seen = [], set()
         total_pages = None
         for page in range(1, max_pages + 1):
@@ -64,12 +64,10 @@ class OlxScraper:
                 seen.add(offer.url)
                 offers.append(offer)
                 found += 1
-                if max_offers is not None and len(offers) >= max_offers:
-                    break
 
             if found and on_page:
                 on_page(page, len(offers), total_pages)
-            if not found or (max_offers is not None and len(offers) >= max_offers):
+            if not found:
                 break
         return offers
 
@@ -134,10 +132,10 @@ def _page_param(url: str) -> int | None:
 def _parse_card(card) -> Offer | None:
     try:
         title = card.find_element(
-            By.CSS_SELECTOR, "div[data-cy='ad-card-title'] h4, div[data-cy='ad-card-title'] h6"
+            By.CSS_SELECTOR, "div[data-testid='ad-card-title'] h4, div[data-testid='ad-card-title'] h6"
         ).text.strip()
         price = card.find_element(By.CSS_SELECTOR, "p[data-testid='ad-price']").text.strip()
-        link = card.find_element(By.CSS_SELECTOR, "div[data-cy='ad-card-title'] a")
+        link = card.find_element(By.CSS_SELECTOR, "div[data-testid='ad-card-title'] a")
         url = link.get_attribute("href") or ""
     except WebDriverException:
         return None

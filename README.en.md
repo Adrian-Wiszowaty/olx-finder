@@ -29,7 +29,9 @@ out CPU, GPU, and RAM on its own; for a jacket, material and size.
 
 ## Example
 
-![Screenshot of OLX Finder running](images/screenshot.png)
+![Screenshot of OLX Finder running — searching and fetching offers](images/screenshot-search.png)
+
+![Screenshot of OLX Finder running — AI verdict](images/screenshot-verdict.png)
 
 ## How it works
 
@@ -92,7 +94,7 @@ quietest?"*), type `nowa` (Polish for "new") to start a new search, or `koniec` 
 The most common options can also be given as flags, which override the settings from `.env`:
 
 ```bash
-olx-finder --provider openai --max-offers 20
+olx-finder --provider openai
 ```
 
 ## Configuration
@@ -104,7 +106,6 @@ Settings are kept in `.env` (template in `.env.example`):
 | `GEMINI_API_KEY` | — | Google Gemini key (free tier available) |
 | `OPENAI_API_KEY` | — | OpenAI key |
 | `LLM_PROVIDER` | auto | Forces a provider: `gemini` or `openai`. When both keys are set, OpenAI is chosen by default |
-| `MAX_OFFERS` | unlimited | Limits the number of fetched offers — useful for quick tests |
 
 There are also less commonly needed variables (`MAX_PAGES`, `HEADLESS`, `OPENAI_MODEL`,
 `GEMINI_MODEL`) — see `config.py` for details.

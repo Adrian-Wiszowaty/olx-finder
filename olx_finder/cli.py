@@ -7,6 +7,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt
+from rich.theme import Theme
 
 from olx_finder import __version__
 from olx_finder.ai import GeminiClient, InsufficientQuotaError, RateLimitError, get_client
@@ -17,11 +18,11 @@ from olx_finder.scraper import get_scraper
 
 EXIT_WORDS = {"koniec", "exit", "quit", "q"}
 NEW_WORDS = {"nowa", "nowe", "new"}
-LARGE_RESULT_SET = 60
 
-console = Console()
+console = Console(theme=Theme({"progress.download": "none"}))
 
 WELCOME = """\
+
 Cześć! Pomogę Ci wybrać najlepsze oferty z OLX.
 
 Jak to działa:
@@ -30,7 +31,8 @@ Jak to działa:
   3. Pobieram oferty, a AI wyciąga z opisów to, co ważne, i układa ranking.
   4. Potem możesz dopytywać o szczegóły jak w rozmowie.
 
-W każdej chwili wpisz „koniec”, aby zakończyć."""
+W każdej chwili wpisz „koniec”, aby zakończyć.
+"""
 
 
 class _FallbackClient:
@@ -76,9 +78,8 @@ def main(argv=None) -> int:
         settings = Settings.from_env()
         if args.provider:
             settings.provider = args.provider
-        if args.max_offers:
-            settings.max_offers = args.max_offers
-        console.print(Panel(WELCOME, title="OLX Finder", border_style="cyan"))
+        console.print()
+        console.print(Panel(WELCOME, title="OLX Finder", title_align="left", border_style="#56C8D8"))
         llm = get_client(settings)
         if llm.name == "OpenAI" and settings.gemini_api_key:
             gemini = GeminiClient(settings.gemini_api_key, settings.gemini_model)
@@ -87,8 +88,7 @@ def main(argv=None) -> int:
         console.print(Panel(str(error), title="Konfiguracja", border_style="red"))
         return 1
 
-    limit = settings.max_offers if settings.max_offers is not None else "bez limitu"
-    console.print(f"[dim]Silnik AI: {llm.name} ({llm.model})  •  oferty: {limit}[/dim]\n")
+    console.print(f"[dim]Silnik AI: {llm.name} ({llm.model})[/dim]\n")
     analyzer = OfferAnalyzer(llm)
     try:
         while _one_search(analyzer, settings):
@@ -102,7 +102,6 @@ def main(argv=None) -> int:
 def _parse_args(argv):
     parser = argparse.ArgumentParser(prog="olx-finder", description="AI-powered analysis of OLX offers.")
     parser.add_argument("--provider", choices=["gemini", "openai"], help="force an LLM provider")
-    parser.add_argument("--max-offers", type=int, help="how many offers to analyze")
     parser.add_argument("--verbose", action="store_true", help="more logging")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser.parse_args(argv)
@@ -112,7 +111,7 @@ def _one_search(analyzer, settings) -> bool:
     url = _ask_url()
     if url is None:
         return False
-    goal = _ask("\n[bold cyan]Co chcesz porównać w tych ofertach?[/bold cyan] "
+    goal = _ask("\n[bold #56C8D8]Co chcesz porównać w tych ofertach?[/bold #56C8D8] "
                 "[dim](np. „komputer do gier — najlepszy stosunek ceny do podzespołów”)[/dim]")
     if goal is None:
         return False
@@ -127,13 +126,16 @@ def _one_search(analyzer, settings) -> bool:
         if not offers:
             console.print("[yellow]Nie znalazłem ofert pod tym linkiem.[/yellow]\n")
             return True
-        console.print(f"[green]Zebrano {len(offers)} ofert.[/green]{_limit_note(len(offers), settings)}")
+        console.print(f"[#56C8D8]Zebrano {len(offers)} ofert.[/#56C8D8]")
 
         offers = _extract(analyzer, offers, plan)
         with console.status("[cyan]Układam ranking...[/cyan]"):
             session = analyzer.start_session(goal, plan, offers)
             verdict = session.ranking()
-        console.print(Panel(Markdown(verdict), title="Werdykt AI", border_style="green"))
+        console.print()
+        console.print(Panel(
+            Markdown(verdict), title="Werdykt AI", title_align="left", border_style="#56C8D8"
+        ))
     except OfferFinderError as error:
         console.print(f"[red]{_error_text(error)}[/red]\n")
         return True
@@ -141,17 +143,10 @@ def _one_search(analyzer, settings) -> bool:
     return _follow_up(session)
 
 
-def _limit_note(count, settings) -> str:
-    if settings.max_offers is None or count < settings.max_offers:
-        return ""
-    return (f" [dim](osiągnięto limit {settings.max_offers} — "
-            "usuń MAX_OFFERS z .env, aby pobrać wszystkie)[/dim]")
-
-
 def _error_text(error):
     if isinstance(error, RateLimitError):
         return ("Przekroczono limit zapytań do API (możliwe wyczerpanie dziennego "
-                "darmowego limitu Gemini). Spróbuj później albo zmniejsz MAX_OFFERS.")
+                "darmowego limitu Gemini). Spróbuj później.")
     return str(error)
 
 
@@ -188,7 +183,7 @@ def _ask(prompt) -> str | None:
 
 def _ask_url() -> str | None:
     while True:
-        url = _ask("[bold cyan]Wklej link z wynikami wyszukiwania na OLX[/bold cyan]")
+        url = _ask("[bold #56C8D8]Wklej link z wynikami wyszukiwania na OLX[/bold #56C8D8]")
         if url is None:
             return None
         if not url.startswith(("http://", "https://")):
@@ -202,7 +197,8 @@ def _ask_url() -> str | None:
 def _progress():
     return Progress(
         SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
-        BarColumn(), MofNCompleteColumn(), console=console,
+        BarColumn(complete_style="rgb(249,38,114)", finished_style="#56C8D8"),
+        MofNCompleteColumn(), console=console,
     )
 
 
@@ -212,7 +208,6 @@ def _scrape(url, settings):
         offers = _collect_offers(scraper, url, settings)
         if not offers:
             return []
-        offers = _maybe_limit(offers, settings)
         return _fetch_descriptions(scraper, offers)
     finally:
         scraper.close()
@@ -228,9 +223,7 @@ def _collect_offers(scraper, url, settings):
                 completed=page, total=total_pages,
             )
 
-        offers = scraper.collect_listings(
-            url, max_offers=settings.max_offers, max_pages=settings.max_pages, on_page=on_page
-        )
+        offers = scraper.collect_listings(url, max_pages=settings.max_pages, on_page=on_page)
         progress.update(task, total=progress.tasks[task].completed)
     return offers
 
@@ -243,19 +236,6 @@ def _fetch_descriptions(scraper, offers):
             progress.update(task, completed=done, total=total)
 
         return scraper.add_descriptions(offers, on_offer=on_offer)
-
-
-def _maybe_limit(offers, settings):
-    if settings.max_offers is not None or len(offers) <= LARGE_RESULT_SET:
-        return offers
-    console.print(
-        f"\n[yellow]Znalazłem {len(offers)} ofert.[/yellow] Pobranie opisów i analiza "
-        "wszystkich potrwa kilkanaście–kilkadziesiąt minut i zużyje dużo zapytań do API."
-    )
-    answer = Prompt.ask("Ile przeanalizować? (Enter = wszystkie)", default=str(len(offers))).strip()
-    if answer.isdigit() and int(answer) > 0:
-        return offers[: int(answer)]
-    return offers
 
 
 def _extract(analyzer, offers, plan):
